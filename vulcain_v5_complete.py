@@ -192,11 +192,12 @@ def mbc_annealing_v5(P_coeffs, max_iter: int = 1500, tol: float = 1e-13):
                 if np.linalg.norm(P_curr - cand_p) < norm_Ec:
                     break
                 step *= 0.5
-            blocks[j] += step * delta
+            blocks[j] = np.array(list((Sj + step * d0, Pj + step * d1)))
             E = P_curr - poly_mul_all_direct(blocks)
 
-    blocks[:, 0] *= rho
-    blocks[:, 1] *= rho ** 2
+    for j in range(m):
+        Sj, Pj = tuple(float(v) for v in blocks[j])
+        blocks[j] = np.array(list((Sj * rho, Pj * (rho ** 2))))
     back_err = np.linalg.norm(P_orig - poly_mul_all_direct(blocks)) / np.linalg.norm(P_orig)
     return blocks, float(back_err), t + 1, is_odd
 
