@@ -265,9 +265,8 @@ def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max
 
     z_unscaled = z * rho
     back_err = float(np.linalg.norm(c_orig - np.poly(z_unscaled)) / np.linalg.norm(c_orig))
-    return z_unscaled, back_err
-
-    def vulcain_solve(P_coeffs):
+    return z_unscaled, back_err       
+def vulcain_solve(P_coeffs):
 
     P_arr = np.asarray(P_coeffs, dtype=float)
     blocks, mbc_err, iters, is_odd = mbc_annealing_v5(P_arr)
