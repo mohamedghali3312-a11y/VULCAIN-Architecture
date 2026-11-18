@@ -266,23 +266,29 @@ def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max
     z_unscaled = z * rho
     back_err = float(np.linalg.norm(c_orig - np.poly(z_unscaled)) / np.linalg.norm(c_orig))
     return z_unscaled, back_err       
-def vulcain_solve(P_coeffs):
 
+def vulcain_solve(P_coeffs):
     P_arr = np.asarray(P_coeffs, dtype=float)
     blocks, mbc_err, iters, is_odd = mbc_annealing_v5(P_arr)
-    roots_init = list()
-    zero_removed = False
-    for row in blocks:
-        S, P = tuple(float(v) for v in row)
-        if is_odd and not zero_removed and abs(P) < 1e-10:
-            roots_init.append(-S)
-            zero_removed = True
-            continue
-        r1, r2 = _block_roots(S, P)
-        roots_init.extend((r1, r2))
+    n_deg = len(P_arr) - 1
+    rho = float(abs(P_arr[-1] / float(next(iter(P_arr)))) ** (1.0 / n_deg)) if abs(P_arr[-1]) > 1e-30 else 1.0
+    if mbc_err <= 1e-2:
+        roots_init = list()
+        zero_removed = False
+        for row in blocks:
+            S, P = tuple(float(v) for v in row)
+            if is_odd and not zero_removed and abs(P) < 1e-10:
+                roots_init.append(-S)
+                zero_removed = True
+                continue
+            r1, r2 = _block_roots(S, P)
+            roots_init.extend((r1, r2))
+    else:
+        angles = list(2.0 * math.pi * k / n_deg + 0.137 for k in range(n_deg))
+        roots_init = list(rho * complex(math.cos(a), math.sin(a)) for a in angles)
 
     roots_refined, final_err = aberth_ehrlich_fast_refinement(roots_init, P_arr)
-    return {
+return {
         "blocks": blocks,
         "mbc_backward_error": mbc_err,
         "iterations": iters,
