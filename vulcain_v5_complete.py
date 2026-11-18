@@ -285,3 +285,19 @@ def vulcain_solve(P_coeffs):
         "mbc_backward_error": mbc_err,
         "iterations": iters,
         "roots": roots_refined,
+        "final_backward_error": final_err,
+    }
+
+
+if __name__ == "__main__":
+    print("=" * 72)
+    print("VULCAIN (v5.1) — EXÉCUTION DU PIPELINE HYBRIDE À 3 ÉTAGES")
+    print("=" * 72)
+
+    rns = isolate_ntt_moduli(two_adicity=8, num_moduli=2)
+    P_exact = mul_poly_rns_exact(list((1, -2, 1)), mul_poly_rns_exact(list((1, -2, 1)), list((1, -2, 1)), rns), rns)
+    print(f"1. Enclume Discrète (NTT-CRT) : (x - 1)^6 construit exactement = {P_exact}")
+
+    res = vulcain_solve(P_exact)
+    print(f"2. Recuit Continu MBC (EFT 106 bits) : Erreur arrière = {res['mbc_backward_error']:.2e} ({res['iterations']} iters)")
+    print(f"3. Raffinement Aberth-Ehrlich : Erreur finale = {res['final_backward_error']:.2e}")
