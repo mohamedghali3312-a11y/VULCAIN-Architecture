@@ -1,4 +1,3 @@
-import Mathlib.Data.Nat.Prime.Basic
 import Mathlib.Data.Real.Basic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
@@ -8,8 +7,12 @@ namespace VulcainLean4
 def V4 : Nat := 2310
 
 theorem mirror_symmetry_V4 (r : Nat) (hr : r <= V4) :
-    Nat.Coprime r V4 → Nat.Coprime (V4 - r) V4 :=
-  fun h => (Nat.coprime_self_sub_left hr).mpr h
+    Nat.gcd r V4 = 1 → Nat.gcd (V4 - r) V4 = 1 := by
+  intro h
+  have h1 : Nat.gcd (V4 - r) ((V4 - r) + r) = 1 := by
+    rw [Nat.sub_add_cancel hr, Nat.gcd_comm]
+    exact h
+  rwa [Nat.gcd_self_add_right] at h1
 
 theorem goldbach_parametric_identity (S r m q : Nat) (hm : m <= q) :
     let N := 2 * (q * S + r) + 2
