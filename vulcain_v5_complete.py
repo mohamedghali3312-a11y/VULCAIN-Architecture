@@ -176,7 +176,8 @@ def mbc_annealing_v5(P_coeffs, max_iter: int = 2000, tol: float = 1e-13):
         if rel_err < tol:
             break
 
-        alpha = 1.0 / m
+                alpha = 1e-4 / m
+
         eps_r = min(1e-2, 0.1 * rel_err) + 1e-9
         mu_t = min(1e-1, 0.1 * (rel_err ** 2)) + 1e-12
 
