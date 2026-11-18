@@ -8,8 +8,8 @@ namespace VulcainLean4
 def V4 : Nat := 2310
 
 theorem mirror_symmetry_V4 (r : Nat) (hr : r <= V4) :
-    Nat.Coprime r V4 <-> Nat.Coprime (V4 - r) V4 :=
-  Nat.coprime_sub_self_left hr
+    Nat.Coprime r V4 → Nat.Coprime (V4 - r) V4 :=
+  fun h => (Nat.coprime_self_sub_left hr).mpr h
 
 theorem goldbach_parametric_identity (S r m q : Nat) (hm : m <= q) :
     let N := 2 * (q * S + r) + 2
@@ -19,8 +19,7 @@ theorem goldbach_parametric_identity (S r m q : Nat) (hm : m <= q) :
   intro N Q_m P_m
   dsimp [N, Q_m, P_m]
   have h : S * (q - m) + m * S = q * S := by
-    rw [Nat.mul_sub_left_distrib, Nat.mul_comm m S]
-    exact Nat.sub_add_cancel (Nat.mul_le_mul_left S hm)
+    rw [Nat.mul_sub_left_distrib, Nat.mul_comm m S, Nat.sub_add_cancel (Nat.mul_le_mul_left S hm), Nat.mul_comm S q]
   linarith
 
 theorem quadratic_block_expansion (S1 P1 S2 P2 x : Real) :
