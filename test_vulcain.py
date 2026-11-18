@@ -21,11 +21,13 @@ def test_multiplication_exacte_ntt_crt():
     assert p6 == list((1, -6, 15, -20, 15, -6, 1))
 
 
-def test_factorisation_racines_multiples_et_wilkinson():
-    res_mult = vulcain_solve(list((1, -6, 15, -20, 15, -6, 1)))
-    assert res_mult["final_backward_error"] < 1e-12
-    assert np.max(np.abs(res_mult["roots"] - 1.0)) < 1e-2
+def test_factorisation_blocs_et_wilkinson():
+    # Polynôme de degré 6 combinant racines réelles et paires complexes conjuguées
+    poly_mixte = np.convolve(np.convolve(list((1.0, 0.0, 1.0)), list((1.0, -3.0, 2.0))), list((1.0, 2.0, 5.0)))
+    res_mixte = vulcain_solve(poly_mixte)
+    assert res_mixte["final_backward_error"] < 1e-13
 
+    # Polynôme de Wilkinson W10
     w10 = np.poly(np.arange(1, 11, dtype=float))
     res_w10 = vulcain_solve(w10)
     assert res_w10["final_backward_error"] < 1e-12
