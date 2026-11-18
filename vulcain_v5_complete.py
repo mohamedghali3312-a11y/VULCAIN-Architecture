@@ -115,15 +115,33 @@ def _two_prod(a: float, b: float):
 
 
 def poly_mod_quad_eft(poly, S: float, P: float):
-    r0 = e0 = r1 = e1 = 0.0
-    for c in poly:
-        ps, eps = _two_prod(-S, r0)
+    # Reste r1*x + r0 de poly(x) modulo (x^2 + S*x + P) via arithmétique compensée EFT
+    # La dérivée d/dS de (x^2 + S*x + P)*Q(x) donne x*Q(x) mod (x^2 + S*x + P)
+    # et d/dP donne Q(x) mod (x^2 + S*x + P)
+    coeffs = list(float(c) for c in poly)
+    n = len(coeffs) - 1
+    if n < 0:
+        return np.array(list((0.0, 0.0)))
+    if n == 0:
+        return np.array(list((0.0, coeffs)))
+    r1 = coeffs
+    e1 = 0.0
+    r0 = coeffs[1]
+    e0 = 0.0
+    for idx in range(2, n + 1):
+        ps, eps = _two_prod(-S, r1)
         pp, epp = _two_prod(-P, r1)
-        s1, es1 = _two_sum(c, ps)
-        nro, es2 = _two_sum(s1, pp)
-        neo = es1 + es2 + eps + epp - S * e0 - P * e1
-        nro, neo = _two_sum(nro, neo)
-        r1, e1, r0, e0 = r0, e0, nro, neo
+        # Division euclidienne par (x^2 + S*x + P) :
+        # r1*x^2 + r0*x + c = r1*(x^2 + S*x + P) + (r0 - S*r1)*x + (c - P*r1)
+        next_r1, es1 = _two_sum(r0, ps)
+        next_e1 = e0 + eps + es1 - S * e1
+        next_r1, next_e1 = _two_sum(next_r1, next_e1)
+
+        next_r0, es0 = _two_sum(coeffs[idx], pp)
+        next_e0 = epp + es0 - P * e1
+        next_r0, next_e0 = _two_sum(next_r0, next_e0)
+
+        r1, e1, r0, e0 = next_r1, next_e1, next_r0, next_e0
     return np.array(list((r1 + e1, r0 + e0)))
 
 
@@ -134,7 +152,7 @@ def poly_mul_all_direct(blocks):
     return res
 
 
-def mbc_annealing_v5(P_coeffs, max_iter: int = 1500, tol: float = 1e-13):
+def mbc_annealing_v5(P_coeffs, max_iter: int = 2000, tol: float = 1e-13):
     P_orig = np.asarray(P_coeffs, dtype=float)
     lead = float(next(iter(P_orig)))
     P_orig = P_orig / lead
@@ -142,19 +160,19 @@ def mbc_annealing_v5(P_coeffs, max_iter: int = 1500, tol: float = 1e-13):
     if is_odd:
         P_orig = np.append(P_orig, 0.0)
     n = len(P_orig) - 1
-    ratios = list(abs(P_orig[k]) ** (1.0 / k) for k in range(1, n + 1) if abs(P_orig[k]) > 1e-30)
+    ratios = list(abs(float(P_orig[k])) ** (1.0 / k) for k in range(1, n + 1) if abs(float(P_orig[k])) > 1e-30)
     rho = float(np.clip(np.exp(np.mean(np.log(ratios))), 1e-8, 1e8)) if ratios else 1.0
-    P_curr = np.array(list(P_orig[k] / (rho ** k) for k in range(n + 1)))
+    P_curr = np.array(list(float(P_orig[k]) / (rho ** k) for k in range(n + 1)))
 
     m = n // 2
     angles = np.pi * (np.arange(m) + 0.5) / m + 0.13 / m
-    blocks = np.column_stack((-2.0 * np.cos(angles), np.ones(m)))
+    blocks = list(np.array(list((-2.0 * math.cos(float(ang)), 1.0))) for ang in angles)
 
     for t in range(max_iter):
         P_prod = poly_mul_all_direct(blocks)
         E = P_curr - P_prod
-        norm_E = np.linalg.norm(E)
-        rel_err = norm_E / np.linalg.norm(P_curr)
+        norm_E = float(np.linalg.norm(E))
+        rel_err = norm_E / float(np.linalg.norm(P_curr))
         if rel_err < tol:
             break
 
@@ -186,20 +204,21 @@ def mbc_annealing_v5(P_coeffs, max_iter: int = 1500, tol: float = 1e-13):
             d0, d1 = tuple(float(v) for v in delta)
 
             step = 1.0
-            norm_Ec = np.linalg.norm(E)
-            for _ in range(8):
+            norm_Ec = float(np.linalg.norm(E))
+            for _ in range(10):
                 cand_p = np.convolve(Qj, np.array(list((1.0, Sj + step * d0, Pj + step * d1))))
-                if np.linalg.norm(P_curr - cand_p) < norm_Ec:
+                if float(np.linalg.norm(P_curr - cand_p)) < norm_Ec:
                     break
                 step *= 0.5
             blocks[j] = np.array(list((Sj + step * d0, Pj + step * d1)))
             E = P_curr - poly_mul_all_direct(blocks)
 
-    for j in range(m):
-        Sj, Pj = tuple(float(v) for v in blocks[j])
-        blocks[j] = np.array(list((Sj * rho, Pj * (rho ** 2))))
-    back_err = np.linalg.norm(P_orig - poly_mul_all_direct(blocks)) / np.linalg.norm(P_orig)
-    return blocks, float(back_err), t + 1, is_odd
+    scaled_blocks = list()
+    for b in blocks:
+        Sj, Pj = tuple(float(v) for v in b)
+        scaled_blocks.append(np.array(list((Sj * rho, Pj * (rho ** 2)))))
+    back_err = float(np.linalg.norm(P_orig - poly_mul_all_direct(scaled_blocks)) / np.linalg.norm(P_orig))
+    return scaled_blocks, back_err, t + 1, is_odd
 
 
 def _block_roots(S: float, P: float):
@@ -266,19 +285,3 @@ def vulcain_solve(P_coeffs):
         "mbc_backward_error": mbc_err,
         "iterations": iters,
         "roots": roots_refined,
-        "final_backward_error": final_err,
-    }
-
-
-if __name__ == "__main__":
-    print("=" * 72)
-    print("VULCAIN (v5.1) — EXÉCUTION DU PIPELINE HYBRIDE À 3 ÉTAGES")
-    print("=" * 72)
-
-    rns = isolate_ntt_moduli(two_adicity=8, num_moduli=2)
-    P_exact = mul_poly_rns_exact(list((1, -2, 1)), mul_poly_rns_exact(list((1, -2, 1)), list((1, -2, 1)), rns), rns)
-    print(f"1. Enclume Discrète (NTT-CRT) : (x - 1)^6 construit exactement = {P_exact}")
-
-    res = vulcain_solve(P_exact)
-    print(f"2. Recuit Continu MBC (EFT 106 bits) : Erreur arrière = {res['mbc_backward_error']:.2e} ({res['iterations']} iters)")
-    print(f"3. Raffinement Aberth-Ehrlich : Erreur finale = {res['final_backward_error']:.2e}")
