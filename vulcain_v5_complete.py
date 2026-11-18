@@ -75,7 +75,7 @@ def ntt_cyclic_mul(a: list, b: list, q: int, omega: int) -> list:
     return list((x * inv_n) % q for x in _ntt(fc, inv_omega))
 
 
-def mul_poly_rns_exact(P_int: list, Q_int: list, rns_modules: list) -> list:
+def mul_poly_rns_exact(P_int: list, Q_int: list, rns_modules: list, two_adicity: int = 8) -> list:
     deg_res = len(P_int) + len(Q_int) - 1
     N = 1 << (deg_res - 1).bit_length()
     (q1, w1), (q2, w2) = rns_modules
@@ -83,9 +83,10 @@ def mul_poly_rns_exact(P_int: list, Q_int: list, rns_modules: list) -> list:
     inv_q1 = pow(q1, -1, q2)
 
     def _mul_mod(q, w):
+        omega_N = pow(w, (1 << two_adicity) // N, q)
         pa = list(x % q for x in P_int) + list((0,)) * (N - len(P_int))
         pb = list(x % q for x in Q_int) + list((0,)) * (N - len(Q_int))
-        return ntt_cyclic_mul(pa, pb, q, w)
+        return ntt_cyclic_mul(pa, pb, q, omega_N)
 
     c1 = _mul_mod(q1, w1)
     c2 = _mul_mod(q2, w2)
@@ -135,7 +136,8 @@ def poly_mul_all_direct(blocks):
 
 def mbc_annealing_v5(P_coeffs, max_iter: int = 1500, tol: float = 1e-13):
     P_orig = np.asarray(P_coeffs, dtype=float)
-    P_orig = P_orig / P_orig[0]
+    lead = float(next(iter(P_orig)))
+    P_orig = P_orig / lead
     is_odd = ((len(P_orig) - 1) % 2 != 0)
     if is_odd:
         P_orig = np.append(P_orig, 0.0)
@@ -158,10 +160,10 @@ def mbc_annealing_v5(P_coeffs, max_iter: int = 1500, tol: float = 1e-13):
 
         alpha = 1.0 / m
         eps_r = min(1e-2, 0.1 * rel_err) + 1e-9
-        mu_t = min(1e-1, 0.1 * (rel_err ** 2)) + 1e-15
+        mu_t = min(1e-1, 0.1 * (rel_err ** 2)) + 1e-12
 
         for j in range(m):
-            Sj, Pj = blocks[j]
+            Sj, Pj = tuple(float(v) for v in blocks[j])
             Qj = poly_mul_all_direct(list(blocks[k] for k in range(m) if k != j))
             Rj = poly_mod_quad_eft(E, Sj, Pj)
             Jj = np.column_stack((poly_mod_quad_eft(np.append(Qj, 0.0), Sj, Pj),
@@ -172,20 +174,21 @@ def mbc_annealing_v5(P_coeffs, max_iter: int = 1500, tol: float = 1e-13):
             for k in range(m):
                 if k != j:
                     d = blocks[j] - blocks[k]
-                    denom = np.dot(d, d) + eps_r
+                    denom = float(np.dot(d, d)) + eps_r
                     grad += -2.0 * d / (denom ** 2)
                     H += (-2.0 * np.eye(2) / (denom ** 2)) + (8.0 * np.outer(d, d) / (denom ** 3))
 
             w, v = np.linalg.eigh(0.5 * (H + H.T))
             H_pos = v @ np.diag(np.maximum(w, 0.0)) @ v.T
-            gamma_j = (alpha / (1e-4 + abs(np.linalg.det(Jj)))) * np.tanh(rel_err ** 2)
+            gamma_j = (alpha / (1e-4 + abs(float(np.linalg.det(Jj))))) * math.tanh(float(rel_err ** 2))
             A_star = Jj.T @ Jj + gamma_j * H_pos + mu_t * np.eye(2)
-            delta = np.linalg.solve(A_star, -(Jj.T @ Rj) - gamma_j * grad)
+            delta, _, _, _ = np.linalg.lstsq(A_star, -(Jj.T @ Rj) - gamma_j * grad, rcond=None)
+            d0, d1 = tuple(float(v) for v in delta)
 
             step = 1.0
             norm_Ec = np.linalg.norm(E)
             for _ in range(8):
-                cand_p = np.convolve(Qj, np.array(list((1.0, Sj + step * delta[0], Pj + step * delta[1]))))
+                cand_p = np.convolve(Qj, np.array(list((1.0, Sj + step * d0, Pj + step * d1))))
                 if np.linalg.norm(P_curr - cand_p) < norm_Ec:
                     break
                 step *= 0.5
@@ -209,11 +212,12 @@ def _block_roots(S: float, P: float):
 def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max_iter: int = 50):
     z = np.asarray(roots_approx, dtype=complex).copy()
     c = np.asarray(coeffs, dtype=complex)
-    c = c / c[0]
+    c_lead = complex(next(iter(c)))
+    c = c / c_lead
     n = len(c) - 1
 
     for _ in range(max_iter):
-        p_vals = np.ones_like(z) * c[0]
+        p_vals = np.ones_like(z) * complex(next(iter(c)))
         p_deriv = np.zeros_like(z)
         for k in range(1, n + 1):
             p_deriv = p_deriv * z + p_vals
@@ -246,7 +250,8 @@ def vulcain_solve(P_coeffs):
     blocks, mbc_err, iters, is_odd = mbc_annealing_v5(P_arr)
     roots_init = list()
     zero_removed = False
-    for S, P in blocks:
+    for row in blocks:
+        S, P = tuple(float(v) for v in row)
         if is_odd and not zero_removed and abs(P) < 1e-10:
             roots_init.append(-S)
             zero_removed = True
