@@ -288,7 +288,7 @@ def vulcain_solve(P_coeffs):
         roots_init = list(rho * complex(math.cos(a), math.sin(a)) for a in angles)
 
     roots_refined, final_err = aberth_ehrlich_fast_refinement(roots_init, P_arr)
-return {
+    return {
         "blocks": blocks,
         "mbc_backward_error": mbc_err,
         "iterations": iters,
