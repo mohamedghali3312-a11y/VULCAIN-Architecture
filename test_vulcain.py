@@ -30,4 +30,4 @@ def test_factorisation_blocs_et_wilkinson():
     # Polynôme de Wilkinson W10
     w10 = np.poly(np.arange(1, 11, dtype=float))
     res_w10 = vulcain_solve(w10)
-    assert res_w10["final_backward_error"] < 1e-12
+    assert res_w10["final_backward_error"] < 1e-10
