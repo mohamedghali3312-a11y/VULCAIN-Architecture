@@ -1,4 +1,5 @@
 import Mathlib.Data.Nat.Prime.Basic
+import Mathlib.Data.Real.Basic
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Ring
 
