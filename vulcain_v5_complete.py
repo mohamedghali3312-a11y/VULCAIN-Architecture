@@ -115,24 +115,18 @@ def _two_prod(a: float, b: float):
 
 
 def poly_mod_quad_eft(poly, S: float, P: float):
-    # Reste r1*x + r0 de poly(x) modulo (x^2 + S*x + P) via arithmétique compensée EFT
-    # La dérivée d/dS de (x^2 + S*x + P)*Q(x) donne x*Q(x) mod (x^2 + S*x + P)
-    # et d/dP donne Q(x) mod (x^2 + S*x + P)
     coeffs = list(float(c) for c in poly)
     n = len(coeffs) - 1
     if n < 0:
         return np.array(list((0.0, 0.0)))
     if n == 0:
-                return np.array(list((0.0, float(next(iter(coeffs))))))
+        return np.array(list((0.0, float(next(iter(coeffs))))))
     it = iter(coeffs)
     r1, r0 = float(next(it)), float(next(it))
     e1 = e0 = 0.0
-
     for idx in range(2, n + 1):
         ps, eps = _two_prod(-S, r1)
         pp, epp = _two_prod(-P, r1)
-        # Division euclidienne par (x^2 + S*x + P) :
-        # r1*x^2 + r0*x + c = r1*(x^2 + S*x + P) + (r0 - S*r1)*x + (c - P*r1)
         next_r1, es1 = _two_sum(r0, ps)
         next_e1 = e0 + eps + es1 - S * e1
         next_r1, next_e1 = _two_sum(next_r1, next_e1)
@@ -152,7 +146,7 @@ def poly_mul_all_direct(blocks):
     return res
 
 
-def mbc_annealing_v5(P_coeffs, max_iter: int = 2000, tol: float = 1e-13):
+def mbc_annealing_v5(P_coeffs, max_iter: int = 1200, tol: float = 1e-13):
     P_orig = np.asarray(P_coeffs, dtype=float)
     lead = float(next(iter(P_orig)))
     P_orig = P_orig / lead
@@ -177,7 +171,6 @@ def mbc_annealing_v5(P_coeffs, max_iter: int = 2000, tol: float = 1e-13):
             break
 
         alpha = 1e-4 / m
-
         eps_r = min(1e-2, 0.1 * rel_err) + 1e-9
         mu_t = min(1e-1, 0.1 * (rel_err ** 2)) + 1e-12
 
@@ -229,28 +222,28 @@ def _block_roots(S: float, P: float):
         return (-S - sd) / 2.0, (-S + sd) / 2.0
     return complex(-S / 2.0, -sd / 2.0), complex(-S / 2.0, sd / 2.0)
 
-def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max_iter: int = 250):
+
+def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max_iter: int = 300):
     c_orig = np.asarray(coeffs, dtype=complex)
     c_lead = complex(next(iter(c_orig)))
     c_orig = c_orig / c_lead
     n = len(c_orig) - 1
-    rho = float(abs(c_orig[-1]) ** (1.0 / n)) if abs(c_orig[-1]) > 1e-30 else 1.0
-    z = np.asarray(roots_approx, dtype=complex).copy() / rho
-    c = np.array(list(c_orig[k] / (rho ** k) for k in range(n + 1)), dtype=complex)
+    z = np.asarray(roots_approx, dtype=complex).copy()
 
-    for _ in range(max_iter):
-        p_vals = np.ones_like(z) * complex(next(iter(c)))
+    for it in range(max_iter):
+        p_vals = np.ones_like(z)
         p_deriv = np.zeros_like(z)
         for k in range(1, n + 1):
             p_deriv = p_deriv * z + p_vals
-            p_vals = p_vals * z + c[k]
+            p_vals = p_vals * z + c_orig[k]
 
         active = np.abs(p_vals) > 1e-300
         if not np.any(active):
             break
 
         newton_step = np.zeros_like(z)
-        newton_step[active] = p_vals[active] / p_deriv[active]
+        safe_deriv = np.where(np.abs(p_deriv[active]) > 1e-300, p_deriv[active], 1e-300)
+        newton_step[active] = p_vals[active] / safe_deriv
 
         Z_diff = z[:, np.newaxis] - z[np.newaxis, :]
         np.fill_diagonal(Z_diff, 1.0)
@@ -259,19 +252,19 @@ def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max
 
         denom = 1.0 - newton_step * np.sum(inv_diffs, axis=1)
         delta = np.where(np.abs(denom) > 1e-15, newton_step / denom, newton_step)
-        z -= delta
+        relax = 0.5 if it < 15 else 1.0
+        z -= relax * delta
         if np.max(np.abs(delta)) < tol * max(1.0, float(np.max(np.abs(z)))):
             break
 
-    z_unscaled = z * rho
-    back_err = float(np.linalg.norm(c_orig - np.poly(z_unscaled)) / np.linalg.norm(c_orig))
-    return z_unscaled, back_err       
+    back_err = float(np.linalg.norm(c_orig - np.poly(z)) / np.linalg.norm(c_orig))
+    return z, back_err
+
 
 def vulcain_solve(P_coeffs):
     P_arr = np.asarray(P_coeffs, dtype=float)
     blocks, mbc_err, iters, is_odd = mbc_annealing_v5(P_arr)
     n_deg = len(P_arr) - 1
-    rho = float(abs(P_arr[-1] / float(next(iter(P_arr)))) ** (1.0 / n_deg)) if abs(P_arr[-1]) > 1e-30 else 1.0
     if mbc_err <= 1e-2:
         roots_init = list()
         zero_removed = False
@@ -284,17 +277,19 @@ def vulcain_solve(P_coeffs):
             r1, r2 = _block_roots(S, P)
             roots_init.extend((r1, r2))
     else:
+        lead = abs(float(next(iter(P_arr))))
+        radius = 1.0 + max(abs(float(P_arr[k])) / lead for k in range(1, n_deg + 1)) ** (1.0 / n_deg)
         angles = list(2.0 * math.pi * k / n_deg + 0.137 for k in range(n_deg))
-        roots_init = list(rho * complex(math.cos(a), math.sin(a)) for a in angles)
+        roots_init = list(radius * complex(math.cos(a), math.sin(a)) for a in angles)
 
     roots_refined, final_err = aberth_ehrlich_fast_refinement(roots_init, P_arr)
-    return {
-        "blocks": blocks,
-        "mbc_backward_error": mbc_err,
-        "iterations": iters,
-        "roots": roots_refined,
-        "final_backward_error": final_err,
-    }
+    return dict(
+        blocks=blocks,
+        mbc_backward_error=mbc_err,
+        iterations=iters,
+        roots=roots_refined,
+        final_backward_error=final_err,
+    )
 
 
 if __name__ == "__main__":
