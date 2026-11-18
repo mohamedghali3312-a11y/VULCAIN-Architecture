@@ -229,13 +229,14 @@ def _block_roots(S: float, P: float):
         return (-S - sd) / 2.0, (-S + sd) / 2.0
     return complex(-S / 2.0, -sd / 2.0), complex(-S / 2.0, sd / 2.0)
 
-
-def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max_iter: int = 50):
-    z = np.asarray(roots_approx, dtype=complex).copy()
-    c = np.asarray(coeffs, dtype=complex)
-    c_lead = complex(next(iter(c)))
-    c = c / c_lead
-    n = len(c) - 1
+def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max_iter: int = 250):
+    c_orig = np.asarray(coeffs, dtype=complex)
+    c_lead = complex(next(iter(c_orig)))
+    c_orig = c_orig / c_lead
+    n = len(c_orig) - 1
+    rho = float(abs(c_orig[-1]) ** (1.0 / n)) if abs(c_orig[-1]) > 1e-30 else 1.0
+    z = np.asarray(roots_approx, dtype=complex).copy() / rho
+    c = np.array(list(c_orig[k] / (rho ** k) for k in range(n + 1)), dtype=complex)
 
     for _ in range(max_iter):
         p_vals = np.ones_like(z) * complex(next(iter(c)))
@@ -262,11 +263,12 @@ def aberth_ehrlich_fast_refinement(roots_approx, coeffs, tol: float = 1e-15, max
         if np.max(np.abs(delta)) < tol * max(1.0, float(np.max(np.abs(z)))):
             break
 
-    back_err = float(np.linalg.norm(c - np.poly(z)) / np.linalg.norm(c))
-    return z, back_err
+    z_unscaled = z * rho
+    back_err = float(np.linalg.norm(c_orig - np.poly(z_unscaled)) / np.linalg.norm(c_orig))
+    return z_unscaled, back_err
 
+    def vulcain_solve(P_coeffs):
 
-def vulcain_solve(P_coeffs):
     P_arr = np.asarray(P_coeffs, dtype=float)
     blocks, mbc_err, iters, is_odd = mbc_annealing_v5(P_arr)
     roots_init = list()
