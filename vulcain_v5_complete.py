@@ -123,11 +123,11 @@ def poly_mod_quad_eft(poly, S: float, P: float):
     if n < 0:
         return np.array(list((0.0, 0.0)))
     if n == 0:
-        return np.array(list((0.0, coeffs)))
-    r1 = coeffs
-    e1 = 0.0
-    r0 = coeffs[1]
-    e0 = 0.0
+                return np.array(list((0.0, float(next(iter(coeffs))))))
+    it = iter(coeffs)
+    r1, r0 = float(next(it)), float(next(it))
+    e1 = e0 = 0.0
+
     for idx in range(2, n + 1):
         ps, eps = _two_prod(-S, r1)
         pp, epp = _two_prod(-P, r1)
