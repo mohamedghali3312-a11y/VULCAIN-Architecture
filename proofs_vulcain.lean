@@ -9,10 +9,16 @@ def V4 : Nat := 2310
 theorem mirror_symmetry_V4 (r : Nat) (hr : r <= V4) :
     Nat.gcd r V4 = 1 → Nat.gcd (V4 - r) V4 = 1 := by
   intro h
-  have h1 : Nat.gcd (V4 - r) ((V4 - r) + r) = 1 := by
-    rw [Nat.sub_add_cancel hr, Nat.gcd_comm]
-    exact h
-  rwa [Nat.gcd_self_add_right] at h1
+  apply Nat.dvd_antisymm
+  · have hd1 : Nat.gcd (V4 - r) V4 ∣ V4 - r := Nat.gcd_dvd_left (V4 - r) V4
+    have hd2 : Nat.gcd (V4 - r) V4 ∣ V4 := Nat.gcd_dvd_right (V4 - r) V4
+    have hd3 : Nat.gcd (V4 - r) V4 ∣ (V4 - r) + r := by
+      rw [Nat.sub_add_cancel hr]
+      exact hd2
+    have hdr : Nat.gcd (V4 - r) V4 ∣ r := (Nat.dvd_add_right hd1).mp hd3
+    rw [← h]
+    exact Nat.dvd_gcd hdr hd2
+  · exact Nat.one_dvd _
 
 theorem goldbach_parametric_identity (S r m q : Nat) (hm : m <= q) :
     let N := 2 * (q * S + r) + 2
